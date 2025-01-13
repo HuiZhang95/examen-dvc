@@ -4,6 +4,7 @@ from pathlib import Path
 import click
 import logging
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from check_structure import check_existing_file, check_existing_folder
 import os
 
@@ -17,43 +18,45 @@ def main(input_filepath, output_filepath):
     logger = logging.getLogger(__name__)
     logger.info('making final data set from raw data')
 
-    input_filepath = 'data/raw_data'#click.prompt('Enter the file path for the input data', type=click.Path(exists=True))
-    input_filepath_raw = f"{input_filepath}/raw.csv"
+    input_filepath = 'data/processed_data'#click.prompt('Enter the file path for the input data', type=click.Path(exists=True))
+    input_filepath_x_train = f"{input_filepath}/X_train.csv"
+    input_filepath_x_test = f"{input_filepath}/X_test.csv"
     output_filepath = 'data/processed_data'#click.prompt('Enter the file path for the output preprocessed data (e.g., output/preprocessed_data.csv)', type=click.Path())
 
-    process_data(input_filepath_raw, output_filepath)
+    process_data(input_filepath_x_train, input_filepath_x_test, output_filepath)
 
-def process_data(input_filepath_raw, output_filepath):
+def process_data(input_filepath_x_train, input_filepath_x_test, output_filepath):
     # Import datasets
-    df = import_dataset(input_filepath_raw)
+    df_train = import_dataset(input_filepath_x_train, index_col=0)
+    df_test = import_dataset(input_filepath_x_test, index_col=0)
 
-    # Split data into training and testing sets
-    X_train, X_test, y_train, y_test = split_data(df)
+    # data normalization
+    X_train, X_test = data_normalization(df_train, df_test)
 
     # Create folder if necessary
     create_folder_if_necessary(output_filepath)
 
     # Save dataframes to their respective output file paths
-    save_dataframes(X_train, X_test, y_train, y_test, output_filepath)
+    save_dataframes(X_train, X_test, output_filepath)
 
 def import_dataset(file_path, **kwargs):
     return pd.read_csv(file_path, **kwargs)
 
-def split_data(df):
-    # Split data into training and testing sets
-    target = df['silica_concentrate']
-    feats = df.drop(['silica_concentrate'], axis=1)
-    X_train, X_test, y_train, y_test = train_test_split(feats, target, test_size=0.3, random_state=42)
-    return X_train, X_test, y_train, y_test
+def data_normalization(df_train, df_test):
+    scaler = StandardScaler()
+    df_train[df_train.columns] = pd.DataFrame(scaler.fit_transform(df_train),index=df_train.index)
+    df_test[df_test.columns] = pd.DataFrame(scaler.transform(df_test), index=df_test.index)
+    return df_train, df_test
+
 
 def create_folder_if_necessary(output_folderpath):
     # Create folder if necessary
     if check_existing_folder(output_folderpath):
         os.makedirs(output_folderpath)
-
-def save_dataframes(X_train, X_test, y_train, y_test, output_folderpath):
+        
+def save_dataframes(X_train, X_test, output_folderpath):
     # Save dataframes to their respective output file paths
-    for file, filename in zip([X_train, X_test, y_train, y_test], ['X_train', 'X_test', 'y_train', 'y_test']):
+    for file, filename in zip([X_train, X_test], ['X_train_scaled', 'X_test_scaled']):
         output_filepath = os.path.join(output_folderpath, f'{filename}.csv')
         if check_existing_file(output_filepath):
             file.to_csv(output_filepath, index=False)
